@@ -1,62 +1,58 @@
-// circuitforge_improved.ino
+// Arduino Zero + DHT11 example sketch
+//
+// Wiring (typical DHT11 module):
+// - DHT11 VCC -> 3.3V (Arduino Zero)
+// - DHT11 GND -> GND
+// - DHT11 DATA -> D2 (change DHT_PIN below if needed)
+//
+// If you use a bare DHT11 sensor (not a module), add a 10K pull-up
+// resistor between DATA and VCC.
 
-// Include necessary libraries
-#include <ArduinoJson.h>
+#include <DHT.h>
 
-// Define constants and global variables
-const int MAX_ATTEMPTS = 5;
-const unsigned long TIMEOUT = 5000;
+constexpr uint8_t DHT_PIN = 2;
+constexpr uint8_t DHT_TYPE = DHT11;
+constexpr unsigned long READ_INTERVAL_MS = 2000;
 
-// Function to handle connections with exponential backoff
-void connectWithExponentialBackoff() {
-    int attempts = 0;
-    unsigned long waitTime;
-    while (attempts < MAX_ATTEMPTS) {
-        if (connect()) {
-            // Connection successful
-            return;
-        }
-        // Calculate wait time with exponential backoff
-        waitTime = pow(2, attempts) * 1000; // seconds
-        delay(waitTime);
-        attempts++;
-    }
+DHT dht(DHT_PIN, DHT_TYPE);
+unsigned long lastReadMs = 0;
+
+void printSensorValues(float temperatureC, float humidity) {
+  Serial.print("Temperature: ");
+  Serial.print(temperatureC, 1);
+  Serial.print(" °C | Humidity: ");
+  Serial.print(humidity, 1);
+  Serial.println(" %");
+
+  const float temperatureF = (temperatureC * 9.0 / 5.0) + 32.0;
+  Serial.print("Temperature (F): ");
+  Serial.println(temperatureF, 1);
 }
 
-// Function to parse JSON safely
-void parseJson(const String& jsonString) {
-    StaticJsonDocument<200> doc; // Adjust size as necessary for your application
-    DeserializationError error = deserializeJson(doc, jsonString);
-    if (error) {
-        Serial.print("Failed to parse JSON: ");
-        Serial.println(error.c_str());
-        return;
-    }
-    // Process JSON data
-}
-
-// Function to prevent buffer overflow
-void safeCopy(char* destination, const char* source, size_t destSize) {
-    strncpy(destination, source, destSize - 1);
-    destination[destSize - 1] = '\0'; // Ensure null termination
-}
-
-// Function to check for NaN safely
-float safeCheckNaN(float value) {
-    if (isnan(value)) {
-        Serial.println("Value is NaN. Setting to 0.");
-        return 0;
-    }
-    return value;
-}
-
-// Main setup function
 void setup() {
-    Serial.begin(115200);
-    connectWithExponentialBackoff(); // Handle connection with improved robustness
+  Serial.begin(115200);
+  while (!Serial) {
+    ; // Wait for serial monitor on native USB boards like Arduino Zero.
+  }
+
+  Serial.println("Starting DHT11 sensor read on Arduino Zero...");
+  dht.begin();
 }
 
-// Main loop function
 void loop() {
-    // Your main loop code here, utilizing non-blocking delays as needed
+  const unsigned long now = millis();
+  if (now - lastReadMs < READ_INTERVAL_MS) {
+    return;
+  }
+  lastReadMs = now;
+
+  const float humidity = dht.readHumidity();
+  const float temperatureC = dht.readTemperature();
+
+  if (isnan(humidity) || isnan(temperatureC)) {
+    Serial.println("Failed to read from DHT11 sensor. Check wiring and try again.");
+    return;
+  }
+
+  printSensorValues(temperatureC, humidity);
 }
